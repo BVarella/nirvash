@@ -13,7 +13,7 @@ class Moment:
         self.microssecond = moment_struct.microssecond
 
     def __str__(self):
-        return "%d-%d-%d %d:%d:%d.%f" % (
+        return "%d-%d-%d %d:%d:%d.%d" % (
             self.year, self.month, self.day,
             self.hour, self.minute, self.second, self.microssecond)
 
