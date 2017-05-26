@@ -1,5 +1,6 @@
-import argparse
-from collections import deque
+import argparse, pdb
+from collections import deque, OrderedDict
+from bintrees import FastRBTree
 from parsers import TradeStruct, OrderStruct, HeaderStruct
 
 class Moment:
@@ -52,7 +53,7 @@ class Order:
         self.price = order_struct.price
         self.quantity = order_struct.quantity
         self.traded = order_struct.traded
-        self.datetime = Moment(order.datetime)
+        self.datetime = Moment(order_struct.datetime)
         self.status = order_struct.status.decode()
         self.agressor = order_struct.agressor
         self.member = order_struct.member
@@ -149,22 +150,83 @@ class Order:
     def is_receptor(self):
         return self.agressor == 2
 
+class OrderBook:
+    def __init__(self):
+        self.orders = dict()
+        self.buy_book = FastRBTree()
+        self.sell_book = FastRBTree()
 
-with open("./tmp/WDO_20170517", "rb") as file:
-    header = HeaderStruct()
-    trade = TradeStruct()
-    order = OrderStruct()
+    def _remove_order(self, order):
+        book = self.buy_book if order.is_buy else self.sell_book
 
-    file.readinto(header)
-    current = header
-    print(Header(header))
+        del book[order.price][order.number]
+        if len(book[order.price]) == 0:
+            del book[order.price]
 
-    while current.next_type > 0:
-        if current.next_type == 1:
-            current = trade
-            file.readinto(current)
-            print(Trade(current))
-        else:
-            current = order
-            file.readinto(current)
-            print(Order(current))
+    def _add_order(self, order):
+        if (order.is_traded
+            or order.is_cancelled
+            or order.is_rejected
+            or order.is_expired):
+            return
+
+        book = self.buy_book if order.is_buy else self.sell_book
+        if order.price not in book:
+            book[order.price] = OrderedDict()
+
+        book[order.price][order.number] = order
+
+    def order(self, number):
+        if number in self.orders:
+            return self.orders[number]
+
+        return None
+
+    def process_order(self, order):
+        if order.number in self.orders:
+            old_order = self.orders[order.number]
+            self._remove_order(old_order)
+        self._add_order(order)
+        self.orders[order.number] = order
+
+class Simulator:
+    def __init__(self, filepath, ontrade=None, onorder=None):
+        self.filepath = filepath
+        self.ontrade = ontrade
+        self.onorder = onorder
+
+    def _reset(self):
+        self.last_trade = None
+        self.last_order = None
+        self.book = OrderBook()
+
+    def _dispatch_trade(self):
+        if self.ontrade:
+            self.ontrade(self.last_trade, self.book)
+
+    def _dispatch_order(self):
+        if self.onorder:
+            self.onorder(self.last_order, self.book)
+
+    def run(self):
+        self._reset()
+        header = HeaderStruct()
+        trade = TradeStruct()
+        order = OrderStruct()
+
+        with open(self.filepath, "rb") as eventfile:
+            eventfile.readinto(header)
+            next_type = header.next_type
+
+            while next_type > 0:
+                if next_type == 1:
+                    eventfile.readinto(trade)
+                    self.last_trade = Trade(trade)
+                    self._dispatch_trade()
+                    next_type = trade.next_type
+                else:
+                    eventfile.readinto(order)
+                    self.last_order = Order(order)
+                    self.book.process_order(self.last_order)
+                    self._dispatch_order()
+                    next_type = order.next_type
