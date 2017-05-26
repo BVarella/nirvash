@@ -190,7 +190,7 @@ def parse_events(tradepath, buypath, sellpath, symbol, targetpath):
 
     print("Composing event file")
     header = HeaderStruct()
-    header.moment = date
+    extend_moment(header.date, date)
     header.symbol = symbol.encode("utf8")
 
     with open(targetpath, "wb") as file:
