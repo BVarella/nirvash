@@ -220,6 +220,7 @@ if __name__ == "__main__":
     parser.add_argument("tradepath", type=str, help="trades filepath")
     parser.add_argument("buypath", type=str, help="buy orders filepath")
     parser.add_argument("sellpath", type=str, help="sell orders filepath")
+    parser.add_argument("targetpath", type=str, help="output target file")
 
     args = parser.parse_args()
     parse_events(
